@@ -130,6 +130,33 @@ The application will open automatically in your browser at `http://localhost:850
 
 ---
 
+## 🌐 Cloud Deployment (Streamlit Community Cloud)
+
+VisionGuard AI is fully optimized and configured for seamless deployment on **Streamlit Community Cloud**.
+
+- **Deployment Platform**: Streamlit Community Cloud (Headless Linux Container)
+- **GitHub Repository**: [https://github.com/Lahari-333/VisionGuard-AI](https://github.com/Lahari-333/VisionGuard-AI)
+- **Direct 1-Click Launch**: [Deploy on Streamlit Community Cloud](https://share.streamlit.io/deploy?repository=Lahari-333/VisionGuard-AI&branch=main&mainModule=app.py)
+- **Live Application URL**: [https://visionguard-ai.streamlit.app](https://visionguard-ai.streamlit.app)
+
+### Deployment Configuration Steps
+1. Navigate to [Streamlit Community Cloud](https://share.streamlit.io/).
+2. Log in with your authorized GitHub account (`Lahari-333`).
+3. Click **New app** and select:
+   - **Repository**: `Lahari-333/VisionGuard-AI`
+   - **Branch**: `main`
+   - **Main file path**: `app.py`
+   - **App URL**: `visionguard-ai` (or your preferred custom URL)
+4. Click **Deploy!**. Streamlit Cloud will automatically install system media packages via `packages.txt` and Python requirements via `requirements.txt`.
+
+### Cloud Hosting Architecture & Optimizations
+- **CPU Inference Acceleration**: Cloud instances execute on shared CPU resources. The processing pipeline automatically normalizes video dimensions to 640px and caps long analysis runs (~300 frames) with dynamic striding to avoid container timeouts.
+- **Strict Privacy & Ephemeral Cleanup**: Uploaded surveillance files are processed in secure memory/temporary storage and purged immediately in a `finally` block.
+- **Disk Space Management**: Generated annotated surveillance video outputs automatically prune older files to maintain a lightweight storage footprint.
+- **100MB File Upload Ceiling**: Set in `.streamlit/config.toml` to protect against container Out-Of-Memory (OOM) termination.
+
+---
+
 ## 📖 Operational Workflow
 
 1. **Select Footage Source**:

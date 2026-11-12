@@ -32,11 +32,19 @@ class VisionDetector:
         self.confidence_threshold = confidence_threshold
         self.target_classes = set(target_classes or SECURITY_TARGET_CLASSES)
         self.model = None
+        self.device = "cpu"
         self._load_model()
+
+    @property
+    def is_loaded(self) -> bool:
+        """Returns True if the underlying YOLO model weights are loaded."""
+        return self.model is not None
 
     def _load_model(self):
         """Initializes the YOLO neural network model safely."""
         try:
+            import torch
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
             from ultralytics import YOLO
             self.model = YOLO(self.model_path)
         except Exception as e:
@@ -55,7 +63,7 @@ class VisionDetector:
         detections = []
 
         try:
-            results = self.model(frame, conf=conf_thresh, verbose=False)
+            results = self.model(frame, conf=conf_thresh, verbose=False, device=self.device)
             if not results or len(results) == 0:
                 return []
 

@@ -234,18 +234,46 @@ def process_video_pipeline(
     """
     Executes the end-to-end VisionGuard AI surveillance analytics pipeline:
     Frame decoding -> YOLO detection -> Multi-object tracking -> Rule evaluation -> HUD rendering -> Video export.
+    Includes cloud CPU optimization, resolution scaling, and memory management.
     """
+    # Clean up older output videos to manage cloud disk space
+    try:
+        old_videos = sorted(OUTPUTS_DIR.glob("annotated_surveillance_*.mp4"), key=os.path.getmtime)
+        while len(old_videos) > 2:
+            old_videos.pop(0).unlink(missing_ok=True)
+    except Exception:
+        pass
+
     cap = cv2.VideoCapture(video_path)
     if not cap.isOpened():
         raise ValueError("Failed to open video source or corrupted file.")
 
+    orig_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    orig_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
-    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+
+    # Cloud optimization: resize resolution if larger than 640w to avoid CPU bottlenecks
+    if orig_w > 640 and orig_w > 0:
+        width = 640
+        height = int(orig_h * (640 / orig_w))
+        width = width if width % 2 == 0 else width - 1
+        height = height if height % 2 == 0 else height - 1
+        needs_resize = True
+    else:
+        width = orig_w if orig_w % 2 == 0 else orig_w - 1
+        height = orig_h if orig_h % 2 == 0 else orig_h - 1
+        needs_resize = False
+
+    # Guard against excessively long videos on cloud CPU (cap total processed frames to ~300)
+    MAX_PROCESSED_FRAMES = 300
+    if total_frames > MAX_PROCESSED_FRAMES:
+        effective_stride = max(frame_stride, int(np.ceil(total_frames / MAX_PROCESSED_FRAMES)))
+    else:
+        effective_stride = frame_stride
 
     # Initialize Tracker and Alert Manager
-    tracker = VisionTracker(max_disappeared=15, iou_threshold=0.25, max_distance=150.0)
+    tracker = VisionTracker(max_disappeared=15, iou_threshold=0.25, max_distance=200.0)
     alert_mgr = AlertManager(
         restricted_zone_norm=restricted_zone,
         loitering_threshold_sec=loitering_thresh,
@@ -258,10 +286,10 @@ def process_video_pipeline(
     
     # Try H.264 / mp4v codec for browser compatibility
     fourcc = cv2.VideoWriter_fourcc(*'avc1')
-    out = cv2.VideoWriter(output_filepath, fourcc, fps / frame_stride, (width, height))
+    out = cv2.VideoWriter(output_filepath, fourcc, fps / effective_stride, (width, height))
     if not out.isOpened():
         fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-        out = cv2.VideoWriter(output_filepath, fourcc, fps / frame_stride, (width, height))
+        out = cv2.VideoWriter(output_filepath, fourcc, fps / effective_stride, (width, height))
 
     frame_idx = 0
     processed_count = 0
@@ -275,8 +303,11 @@ def process_video_pipeline(
             break
 
         frame_idx += 1
-        if frame_idx % frame_stride != 0:
+        if frame_idx % effective_stride != 0:
             continue
+
+        if needs_resize:
+            frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
 
         timestamp_sec = frame_idx / fps
 
@@ -469,6 +500,8 @@ if run_btn:
 
     if temp_input_video:
         detector = load_detector("yolov8n.pt", conf_thresh=conf_threshold)
+        if not detector.is_loaded:
+            st.warning("⚠️ YOLO neural network weights could not be loaded into memory. Running in passive surveillance mode.")
 
         progress_container = st.container()
         with progress_container:
@@ -491,6 +524,13 @@ if run_btn:
             st.success("✅ Surveillance video analysis completed successfully!")
         except Exception as ex:
             st.error(f"Analysis Error: {str(ex)}")
+        finally:
+            # Guarantee cleanup of temporary uploaded surveillance footage to preserve privacy & storage
+            if feed_mode == "Upload Surveillance Video (MP4)" and temp_input_video and os.path.exists(temp_input_video):
+                try:
+                    os.remove(temp_input_video)
+                except Exception:
+                    pass
 
 
 # ---------------------------------------------------------
